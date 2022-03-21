@@ -8,7 +8,7 @@
 #pragma mark -
 #pragma mark Private methods and instance variables
 
-@interface GPUImageView () 
+@interface GPUImageView ()
 {
     GPUImageFramebuffer *inputFramebufferForDisplay;
     GLuint displayRenderbuffer, displayFramebuffer;
@@ -48,16 +48,16 @@
 #pragma mark -
 #pragma mark Initialization and teardown
 
-+ (Class)layerClass 
++ (Class)layerClass
 {
-	return [CAEAGLLayer class];
+    return [CAEAGLLayer class];
 }
 
 - (id)initWithFrame:(CGRect)frame
 {
     if (!(self = [super initWithFrame:frame]))
     {
-		return nil;
+        return nil;
     }
     
     [self commonInit];
@@ -67,19 +67,19 @@
 
 -(id)initWithCoder:(NSCoder *)coder
 {
-	if (!(self = [super initWithCoder:coder])) 
+    if (!(self = [super initWithCoder:coder]))
     {
         return nil;
-	}
+    }
 
     [self commonInit];
 
-	return self;
+    return self;
 }
 
 - (void)commonInit;
 {
-    // Set scaling to account for Retina display	
+    // Set scaling to account for Retina display
     if ([self respondsToSelector:@selector(setContentScaleFactor:)])
     {
         self.contentScaleFactor = [[UIScreen mainScreen] scale];
@@ -139,9 +139,8 @@
         runSynchronouslyOnVideoProcessingQueue(^{
             [self destroyDisplayFramebuffer];
             [self createDisplayFramebuffer];
+            [self recalculateViewGeometry];
         });
-    } else if (!CGSizeEqualToSize(self.bounds.size, CGSizeZero)) {
-        [self recalculateViewGeometry];
     }
 }
 
@@ -161,12 +160,12 @@
     
     glGenFramebuffers(1, &displayFramebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, displayFramebuffer);
-	
+    
     glGenRenderbuffers(1, &displayRenderbuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, displayRenderbuffer);
-	
+    
     [[[GPUImageContext sharedImageProcessingContext] context] renderbufferStorage:GL_RENDERBUFFER fromDrawable:(CAEAGLLayer*)self.layer];
-	
+    
     GLint backingWidth, backingHeight;
 
     glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &backingWidth);
@@ -184,12 +183,10 @@
 //    NSLog(@"Backing width: %d, height: %d", backingWidth, backingHeight);
 
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, displayRenderbuffer);
-	
-    __unused GLuint framebufferCreationStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    
+    GLuint framebufferCreationStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     NSAssert(framebufferCreationStatus == GL_FRAMEBUFFER_COMPLETE, @"Failure with display framebuffer generation for display of size: %f, %f", self.bounds.size.width, self.bounds.size.height);
     boundsSizeAtFrameBufferEpoch = self.bounds.size;
-
-    [self recalculateViewGeometry];
 }
 
 - (void)destroyDisplayFramebuffer;
@@ -197,16 +194,16 @@
     [GPUImageContext useImageProcessingContext];
 
     if (displayFramebuffer)
-	{
-		glDeleteFramebuffers(1, &displayFramebuffer);
-		displayFramebuffer = 0;
-	}
-	
-	if (displayRenderbuffer)
-	{
-		glDeleteRenderbuffers(1, &displayRenderbuffer);
-		displayRenderbuffer = 0;
-	}
+    {
+        glDeleteFramebuffers(1, &displayFramebuffer);
+        displayFramebuffer = 0;
+    }
+    
+    if (displayRenderbuffer)
+    {
+        glDeleteRenderbuffers(1, &displayRenderbuffer);
+        displayRenderbuffer = 0;
+    }
 }
 
 - (void)setDisplayFramebuffer;
@@ -235,12 +232,16 @@
     runSynchronouslyOnVideoProcessingQueue(^{
         CGFloat heightScaling, widthScaling;
         
-        CGSize currentViewSize = self.bounds.size;
+        __block CGRect currentBounds;
+
+        runOnMainQueueWithoutDeadlocking(^{
+            currentBounds = self.bounds;
+        });
         
         //    CGFloat imageAspectRatio = inputImageSize.width / inputImageSize.height;
         //    CGFloat viewAspectRatio = currentViewSize.width / currentViewSize.height;
         
-        CGRect insetRect = AVMakeRectWithAspectRatioInsideRect(inputImageSize, self.bounds);
+        CGRect insetRect = AVMakeRectWithAspectRatioInsideRect(inputImageSize, currentBounds);
         
         switch(_fillMode)
         {
@@ -251,14 +252,14 @@
             }; break;
             case kGPUImageFillModePreserveAspectRatio:
             {
-                widthScaling = insetRect.size.width / currentViewSize.width;
-                heightScaling = insetRect.size.height / currentViewSize.height;
+                widthScaling = insetRect.size.width / currentBounds.size.width;
+                heightScaling = insetRect.size.height / currentBounds.size.height;
             }; break;
             case kGPUImageFillModePreserveAspectRatioAndFill:
             {
-                //            CGFloat widthHolder = insetRect.size.width / currentViewSize.width;
-                widthScaling = currentViewSize.height / insetRect.size.height;
-                heightScaling = currentViewSize.width / insetRect.size.width;
+                //            CGFloat widthHolder = insetRect.size.width / currentBounds.size.width;
+                widthScaling = currentBounds.size.height / insetRect.size.height;
+                heightScaling = currentBounds.size.width / insetRect.size.width;
             }; break;
         }
         
@@ -340,10 +341,10 @@
     };
     
     static const GLfloat rotateRightHorizontalFlipTextureCoordinates[] = {
-        0.0f, 1.0f,
-        0.0f, 0.0f,
         1.0f, 1.0f,
         1.0f, 0.0f,
+        0.0f, 1.0f,
+        0.0f, 0.0f,
     };
 
     static const GLfloat rotate180TextureCoordinates[] = {
